@@ -46,22 +46,24 @@ class DataProvider():
             }
 
 def extract_feature(img):
-    tmp = fc(img, 100, nonlinearity = 'relu')
-    return tf.nn.top_k(tmp, 10, sorted = False)[0]
-    x = conv(img, 20, nonlinearity = 'relu', batch_norm = True)
+    x = conv(img, 10, nonlinearity = 'relu', batch_norm = True)
     x = pool(x)
-    x = conv(x, 40, nonlinearity = 'relu', batch_norm = True)
+    x = conv(x, 20, nonlinearity = 'relu', batch_norm = True)
+    x = pool(x)
+    x = conv(x, 30, nonlinearity = 'relu', batch_norm = True)
     x = pool(x)
     return fc(x, 100, nonlinearity = 'relu')
 
 def make_network(args):
     img = tf.placeholder(tf.float32, shape =[None, 28, 28, 1])
-    label = tf.placeholder(tf.int64, shape = [None,])
-    one_hot = tf.to_float( tf.one_hot(label, depth = 10, axis = -1, on_value = 1, off_value = 0) )
+    with tf.device('/cpu:0'):
+        label = tf.placeholder(tf.int64, shape = [None,])
+        one_hot = tf.to_float( tf.one_hot(label, depth = 10, axis = -1, on_value = 1, off_value = 0) )
 
     x = extract_feature(img)
     predict = fc(x, 10)
     y = tf.nn.softmax(predict)
+    y = y*tf.to_float(y > 1e-20) + 1e-20 
     cross_entropy = tf.reduce_mean(-tf.reduce_sum(one_hot * tf.log(y), reduction_indices=[1]))
 
     return {

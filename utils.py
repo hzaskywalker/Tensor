@@ -29,7 +29,7 @@ def batch_norm(x, n_out = None):
         #normed = x
         def haha(x):
             return tf.reshape(x, [-1,1,1,n_out])
-        normed = (x - haha(mean))/(haha(var) + 1e-3) * haha(gamma) + haha(beta)
+        normed = (x - haha(mean))/(haha(var) + 1e-10) * haha(gamma) + haha(beta)
         #GLOBAL['var'].append(normed)
     return normed
 
@@ -45,10 +45,10 @@ def decorate(x, nonlinearity = 'relu', batchnorm = False):
     else:
         raise NotImplementedError
 
-def conv(x, channel, kernel_shape = 3, padding = 'VALID', stride = 1, nonlinearity = 'identity', use_cudnn_on_gpu = False, batch_norm = False):
+def conv(x, channel, kernel_shape = 3, padding = 'VALID', stride = 1, nonlinearity = 'identity', use_cudnn_on_gpu = True, batch_norm = False):
     filter_shape = (kernel_shape, kernel_shape, int(x.get_shape()[3]), channel)
 
-    W = tf.Variable(tf.truncated_normal( filter_shape, stddev=0.1), name = 'W')
+    W = tf.Variable(tf.truncated_normal( filter_shape, stddev=1/np.prod(filter_shape[:-1])**0.5), name = 'W')
     b = tf.Variable(tf.constant(0.001, shape=[1, 1, 1, channel]), name = "b")
 
     oup = tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = padding, data_format = 'NHWC', use_cudnn_on_gpu = use_cudnn_on_gpu, name = 'conv')
@@ -70,7 +70,7 @@ def flatten(x):
 
 def fc(x, channel, nonlinearity = 'identity'):
     x = flatten(x)
-    W = tf.Variable(tf.truncated_normal((int(x.get_shape()[1]), channel), stddev = 0.1))
+    W = tf.Variable(tf.truncated_normal((int(x.get_shape()[1]), channel), stddev = 1/(int(x.get_shape()[1]))**0.5))
     b = tf.Variable(tf.zeros([channel]))
     x = tf.matmul(x, W) + b
     return decorate(x, nonlinearity)
@@ -82,18 +82,20 @@ def make_parser():
     parser.add_argument('-l', '--learning_rate', type = int, default = 0.01)
     parser.add_argument('-o', '--save_path', default = 'hehe.save')
     parser.add_argument('-c', '--continue_path', default = None)
+    parser.add_argument('-d', '--devices', type = int, default = 0)
     return parser
 
 def train(args, make_network, make_trainer):
-    phase_train = tf.placeholder(tf.bool, name = 'phase_train')
-    GLOBAL['phase_train'] = phase_train
-    net = make_network(args)
+    with tf.device('/gpu:{}'.format(args.devices)):
+        phase_train = tf.placeholder(tf.bool, name = 'phase_train')
+        GLOBAL['phase_train'] = phase_train
+        net = make_network(args)
 
     #train_step = tf.train.AdamOptimizer(args.learning_rate).minimize(net['loss'])
 
     train_step = tf.train.GradientDescentOptimizer(0.5).minimize(net['loss'])
     init = tf.initialize_all_variables()
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     sess.run(init)
 
 
